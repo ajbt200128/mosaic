@@ -27,8 +27,8 @@ pub struct MosaicApp {
 
 impl Default for MosaicApp {
     fn default() -> Self {
-        let im1 = Reader::open("imgs/a.jpg").unwrap().decode().unwrap();
-        let im2 = Reader::open("imgs/b.jpg").unwrap().decode().unwrap();
+        let im1 = Reader::open("imgs/bird1.jpg").unwrap().decode().unwrap();
+        let im2 = Reader::open("imgs/bird2.jpg").unwrap().decode().unwrap();
         Self {
             image_a: to_retained("image_a", im1.clone()),
             image_b: to_retained("image_b", im2.clone()),
@@ -139,8 +139,8 @@ fn overlay_into(a: &DynamicImage, b: &mut DynamicImage, center: (f64, f64)) {
                 p.blend(&q);
             }
             if r.0[3] != 0 {
-                r.0[3] = 180;
-                p.0[3] = 160;
+                r.0[3] = 130;
+                p.0[3] = 190;
                 p.blend(&r);
             }
             p.0[3] = 255;
