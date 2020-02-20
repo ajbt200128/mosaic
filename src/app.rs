@@ -27,8 +27,8 @@ pub struct MosaicApp {
 
 impl Default for MosaicApp {
     fn default() -> Self {
-        let im1 = Reader::open("imgs/bird1.jpg").unwrap().decode().unwrap();
-        let im2 = Reader::open("imgs/bird2.jpg").unwrap().decode().unwrap();
+        let im1 = Reader::open("imgs/a.jpg").unwrap().decode().unwrap();
+        let im2 = Reader::open("imgs/b.jpg").unwrap().decode().unwrap();
         Self {
             image_a: to_retained("image_a", im1.clone()),
             image_b: to_retained("image_b", im2.clone()),
@@ -130,17 +130,18 @@ fn overlay_into(a: &DynamicImage, b: &mut DynamicImage, center: (f64, f64)) {
             //    p = r;
             //}else{
             p_a.0[3] = 185;
+            // Smallest
             p_b.0[3] = 125;
+
+            // Blend all three photos together
             p_a.blend(&p_b);
+None            p.blend(&p_a);
+            // Set alpha according to distance from center
             p.0[3] = distance_alpha(center, (x as f64, y as f64), b.width());
-            p.blend(&p_a);
-            if q.0[3] != 0 {
-                q.0[3] = distance_alpha(center, (x as f64, y as f64), b.width());
-                p.blend(&q);
-            }
+
+            // Blend first photo and all merged photos
             if r.0[3] != 0 {
-                r.0[3] = 130;
-                p.0[3] = 190;
+                r.0[3] = 150;
                 p.blend(&r);
             }
             p.0[3] = 255;
@@ -156,8 +157,6 @@ fn overlay_into(a: &DynamicImage, b: &mut DynamicImage, center: (f64, f64)) {
 
 fn find_homography(a: Vec<Value>, b: Vec<Value>) -> [f32; 9] {
     let mut v = [1.0; 9];
-    //let x_delta = a[0].x - b[0].x;
-    //let y_delta = a[0].y - b[0].y;
     let mut x_src = [0.0; 4];
     let mut y_src = [0.0; 4];
     let mut x_dst = [0.0; 4];
@@ -168,15 +167,10 @@ fn find_homography(a: Vec<Value>, b: Vec<Value>) -> [f32; 9] {
         x_dst[i] = b[i].x as f32;
         y_dst[i] = b[i].y as f32;
     }
-    //println!(
-    //    "X_S: {:?}, X_D: {:?}\n Y_S: {:?} Y_D: {:?}",
-    //    x_src, x_dst, y_src, y_dst
-    //);
     let x_src = Array::new(&x_src, Dim4::new(&[4, 1, 1, 1]));
     let y_src = Array::new(&y_src, Dim4::new(&[4, 1, 1, 1]));
     let x_dst = Array::new(&x_dst, Dim4::new(&[4, 1, 1, 1]));
     let y_dst = Array::new(&y_dst, Dim4::new(&[4, 1, 1, 1]));
-    //print(&x_src);
     let (h, i): (Array<f32>, i32) = homography(
         &x_src,
         &y_src,
@@ -186,7 +180,6 @@ fn find_homography(a: Vec<Value>, b: Vec<Value>) -> [f32; 9] {
         100000.0,
         10,
     );
-    //println!("I: {}", i);
 
     print(&h);
     h.host(&mut v);
@@ -284,7 +277,7 @@ impl epi::App for MosaicApp {
                     let projection = Projection::from_matrix(h).unwrap();
                     let white: image::Rgba<u8> = image::Rgba([0, 0, 0, 0]);
                     let mut canvas: RgbaImage =
-                        ImageBuffer::new(self.image_b_orig.width() * 2, self.image_b_orig.height());
+                        ImageBuffer::new(self.image_a_orig.width() * 2, self.image_a_orig.height());
                     warp_into(
                         &self.image_b_orig.to_rgba8(),
                         &projection,
