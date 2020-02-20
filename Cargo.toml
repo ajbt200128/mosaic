@@ -1,7 +1,7 @@
 [package]
-name = "eframe_template"
+name = "mosaic"
 version = "0.1.0"
-authors = ["Emil Ernerfeldt <emil.ernerfeldt@gmail.com>"]
+authors = ["Austin Theriault <atheriault@gwu.edu>"]
 edition = "2021"
 rust-version = "1.56"
 
@@ -12,8 +12,11 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 eframe = "0.17.0" # Gives us egui, epi and web+native backends
+image = { version = "0.24", features = ["jpeg", "png"] }
+egui_extras = {version = "0.17.0", features = ["image"] }
 
 serde = { version = "1", features = ["derive"], optional = true }
+imageproc = "0.22.0"
 
 [features]
 default = []
@@ -25,7 +28,8 @@ opt-level = 2 # fast and small wasm
 [patch.crates-io]
 
 # If you want to use the bleeding edge version of `egui`:
-# eframe = { git = "https://github.com/emilk/egui", branch = "master" }
+eframe = { git = "https://github.com/emilk/egui", branch = "master" }
+egui_extras = { git = "https://github.com/emilk/egui", branch = "master" }
 
 # If you fork https://github.com/emilk/egui you can test with:
 # eframe = { path = "../egui/eframe" }
