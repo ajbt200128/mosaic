@@ -7,9 +7,12 @@ use eframe::{
     epaint::ColorImage,
     epi,
 };
-use egui_extras::{image::load_image_bytes, RetainedImage};
-use image::{io::Reader, DynamicImage, EncodableLayout, GenericImageView, Pixel, ImageBuffer, RgbaImage, GenericImage};
-use imageproc::{geometric_transformations::{warp, Projection, warp_into}, map::map_colors2};
+use egui_extras::RetainedImage;
+use image::{
+    imageops::resize, io::Reader, DynamicImage, GenericImage, GenericImageView, ImageBuffer, Pixel,
+    RgbaImage,
+};
+use imageproc::geometric_transformations::{warp_into, Projection};
 
 pub struct MosaicApp {
     image_a: RetainedImage,
@@ -19,6 +22,7 @@ pub struct MosaicApp {
     points_a: Vec<Value>,
     points_b: Vec<Value>,
     warped: Option<RetainedImage>,
+    warped_orig: Option<DynamicImage>,
 }
 
 impl Default for MosaicApp {
@@ -33,6 +37,7 @@ impl Default for MosaicApp {
             points_a: vec![],
             points_b: vec![],
             warped: None,
+            warped_orig: None,
         }
     }
 }
@@ -54,19 +59,99 @@ fn clamp_add(a: u8, b: u8, max: u8) -> u8 {
         a + b
     }
 }
-fn overlay_into(a: &DynamicImage, b: &mut DynamicImage){
-    for y in 0..a.height(){
-        for x in 0..a.width(){
+
+fn distance_alpha((a_x, a_y): (f64, f64), (b_x, b_y): (f64, f64), max: u32) -> u8 {
+    255 - (((a_x - b_x).powf(2.0) + (a_y - b_y).powf(2.0)).sqrt() / max as f64) as u8
+}
+
+fn overlay_into(a: &DynamicImage, b: &mut DynamicImage, center: (f64, f64)) {
+    let mut b_n = b.clone();
+    println!("a-------");
+    for y in 0..a.height() {
+        for x in 0..a.width() {
             let mut p = a.get_pixel(x, y);
-            let q = b.get_pixel(x, y);
-            if p.0[3] == 0{
+            let mut q = b.get_pixel(x, y);
+            //p.0[3] = distance_alpha(center, (x as f64, y as f64), b.width());
+            if p.0[3] == 0 {
                 p = q;
-            }else if q.0[3] != 0{
-                p.apply2(&q, |c1, c2| ((c1 as u16 + c2 as u16)/2).min(u8::MAX.into()) as u8);
+            } else if q.0[3] != 0 {
+                q.0[3] = 125;
+                p.0[3] = 125;
+                p.blend(&q);
             }
+            b_n.put_pixel(x, y, p);
+        }
+    }
+    b_n.save("dbg.jpg");
+    let b_n_a: DynamicImage = image::DynamicImage::ImageRgba8(resize(
+        &b_n,
+        b_n.width() / 8,
+        b_n.height() / 8,
+        image::imageops::FilterType::Nearest,
+    ));
+    println!("b-----");
+    b_n_a.blur(100.0);
+    let b_n_b: DynamicImage = image::DynamicImage::ImageRgba8(resize(
+        &b_n_a,
+        b_n_a.width() / 8,
+        b_n_a.height() / 8,
+        image::imageops::FilterType::Nearest,
+    ));
+    b_n_b.blur(200.0);
+    println!("b-----");
+    let b_n_a: DynamicImage = image::DynamicImage::ImageRgba8(resize(
+        &b_n_a,
+        b.width(),
+        b.height(),
+        image::imageops::FilterType::Nearest,
+    ));
+    let b_n_b: DynamicImage = image::DynamicImage::ImageRgba8(resize(
+        &b_n_b,
+        b.width(),
+        b.height(),
+        image::imageops::FilterType::Nearest,
+    ));
+    println!("c------");
+    for y in 0..b.height() {
+        for x in 0..b.width() {
+            let mut p = b_n.get_pixel(x, y);
+            let mut p_a = b_n_a.get_pixel(x, y);
+            let mut p_b = b_n_b.get_pixel(x, y);
+            let mut q = b.get_pixel(x, y);
+
+            let mut r = if x < a.width() && y < a.height() {
+                a.get_pixel(x, y)
+            } else {
+                image::Rgba([0, 0, 0, 0])
+            };
+            //if r.0[3] == 0 && q.0[3] != 0{
+            //    p = q
+            //}else if r.0[3] != 0 && q.0[3] == 0{
+            //    p = r;
+            //}else{
+            p_a.0[3] = 185;
+            p_b.0[3] = 125;
+            p_a.blend(&p_b);
+            p.0[3] = distance_alpha(center, (x as f64, y as f64), b.width());
+            p.blend(&p_a);
+            if q.0[3] != 0 {
+                q.0[3] = distance_alpha(center, (x as f64, y as f64), b.width());
+                p.blend(&q);
+            }
+            if r.0[3] != 0 {
+                r.0[3] = 180;
+                p.0[3] = 160;
+                p.blend(&r);
+            }
+            p.0[3] = 255;
+
+            
+            //}
+
             b.put_pixel(x, y, p);
         }
     }
+    println!("d------");
 }
 
 fn find_homography(a: Vec<Value>, b: Vec<Value>) -> [f32; 9] {
@@ -147,8 +232,7 @@ impl epi::App for MosaicApp {
                             if plot_ui.plot_clicked() {
                                 let mut coord = plot_ui.pointer_coordinate().unwrap();
                                 coord.y = self.image_a_orig.height() as f64 - coord.y;
-                                self.points_a
-                                    .insert(0, coord);
+                                self.points_a.insert(0, coord);
                                 if self.points_a.len() > 4 {
                                     self.points_a.pop();
                                 }
@@ -164,15 +248,18 @@ impl epi::App for MosaicApp {
                             if plot_ui.plot_clicked() {
                                 let mut coord = plot_ui.pointer_coordinate().unwrap();
                                 coord.y = self.image_b_orig.height() as f64 - coord.y;
-                                self.points_b
-                                    .insert(0,coord);
+                                self.points_b.insert(0, coord);
                                 if self.points_b.len() > 4 {
                                     self.points_b.pop();
                                 }
                             }
                         });
                 });
-                if self.warped.is_some(){
+                if self.warped.is_some() {
+                    if ui.button("save").clicked() {
+                       self.warped_orig.clone().unwrap().save("out.jpg");
+
+                    }
                     let plot_image_c = PlotImage::new(
                         self.warped.as_ref().unwrap().texture_id(ctx),
                         egui::plot::Value {
@@ -196,16 +283,30 @@ impl epi::App for MosaicApp {
                     let h = find_homography(self.points_b.clone(), self.points_a.clone());
                     let projection = Projection::from_matrix(h).unwrap();
                     let white: image::Rgba<u8> = image::Rgba([0, 0, 0, 0]);
-                    let mut canvas: RgbaImage = ImageBuffer::new(self.image_b_orig.width()*2, self.image_b_orig.height());
+                    let mut canvas: RgbaImage =
+                        ImageBuffer::new(self.image_b_orig.width() * 2, self.image_b_orig.height());
                     warp_into(
                         &self.image_b_orig.to_rgba8(),
                         &projection,
                         imageproc::geometric_transformations::Interpolation::Nearest,
                         white,
-                        &mut canvas
+                        &mut canvas,
                     );
                     let mut canvas = image::DynamicImage::ImageRgba8(canvas);
-                    overlay_into(&self.image_a_orig,&mut canvas);
+                    let x = self
+                        .points_a
+                        .clone()
+                        .iter()
+                        .fold(0.0, |cntr, curr| cntr + curr.x)
+                        / 4.0;
+                    let y = self
+                        .points_a
+                        .clone()
+                        .iter()
+                        .fold(0.0, |cntr, curr| cntr + curr.y)
+                        / 4.0;
+                    overlay_into(&self.image_a_orig, &mut canvas, (x, y));
+                    self.warped_orig = Some(canvas.clone());
                     self.warped = Some(to_retained("w", canvas));
                     self.points_a = vec![];
                     self.points_b = vec![];
