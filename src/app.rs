@@ -58,8 +58,12 @@ fn overlay_into(a: &DynamicImage, b: &mut DynamicImage){
     for y in 0..a.height(){
         for x in 0..a.width(){
             let mut p = a.get_pixel(x, y);
-            let q = a.get_pixel(x, y);
-            p.apply2(&q, |c1, c2| (clamp_add(c1, c2, u8::MAX)));
+            let q = b.get_pixel(x, y);
+            if p.0[3] == 0{
+                p = q;
+            }else if q.0[3] != 0{
+                p.apply2(&q, |c1, c2| ((c1 as u16 + c2 as u16)/2).min(u8::MAX.into()) as u8);
+            }
             b.put_pixel(x, y, p);
         }
     }
@@ -188,12 +192,10 @@ impl epi::App for MosaicApp {
                 }
             });
             if ui.button("Merge").clicked() {
-                println!("a:{:?}, b:{:?}", self.points_a, self.points_b);
                 if self.points_a.len() == 4 && self.points_b.len() == 4 {
                     let h = find_homography(self.points_b.clone(), self.points_a.clone());
-                    println!("H: {:?}", h);
                     let projection = Projection::from_matrix(h).unwrap();
-                    let white: image::Rgba<u8> = image::Rgba([255, 255, 255, 255]);
+                    let white: image::Rgba<u8> = image::Rgba([0, 0, 0, 0]);
                     let mut canvas: RgbaImage = ImageBuffer::new(self.image_b_orig.width()*2, self.image_b_orig.height());
                     warp_into(
                         &self.image_b_orig.to_rgba8(),
