@@ -12,11 +12,12 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 eframe = "0.17.0" # Gives us egui, epi and web+native backends
-image = { version = "0.24", features = ["jpeg", "png"] }
+image = { version = "0.23", features = ["jpeg", "png"] }
 egui_extras = {version = "0.17.0", features = ["image"] }
 
 serde = { version = "1", features = ["derive"], optional = true }
 imageproc = "0.22.0"
+arrayfire = "3.8.0"
 
 [features]
 default = []
